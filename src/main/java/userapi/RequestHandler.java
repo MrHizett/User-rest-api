@@ -1,6 +1,7 @@
 package userapi;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
@@ -8,18 +9,21 @@ import com.sun.net.httpserver.HttpHandler;
 import java.io.*;
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 
 public class RequestHandler implements HttpHandler {
     private Map<Long, User> users = new HashMap<>();
-    private long nextId = 4;
+    private long nextId = 1;
+    private final ObjectMapper om = new ObjectMapper();
+    private final File file = new File("users.json");
+
 
     @Override
     public void handle(HttpExchange exchange) throws IOException {
         try{
             String method = exchange.getRequestMethod();
-            ObjectMapper om = new ObjectMapper();
             String body = new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
             int status = 200;
             String json = null;
@@ -56,6 +60,7 @@ public class RequestHandler implements HttpHandler {
                         users.put(nextId, storedUser);
                         nextId++;
                         json = om.writeValueAsString(storedUser);
+                        save();
                         status = 201;
                     }catch (JsonProcessingException e){
                         status = 400;
@@ -70,6 +75,7 @@ public class RequestHandler implements HttpHandler {
                     }
                     else{
                         users.remove(id);
+                        save();
                         status = 204;
                     }
                 }
@@ -92,6 +98,7 @@ public class RequestHandler implements HttpHandler {
                             User storedUser = new User(id, incoming.getName(), incoming.getEmail());
                             users.replace(id, storedUser);
                             json = om.writeValueAsString(storedUser);
+                            save();
                         }
                         catch (JsonProcessingException e){
                             status = 400;
@@ -125,9 +132,21 @@ public class RequestHandler implements HttpHandler {
         }
     }
 
-    public RequestHandler() {
-        users.put(1L, new User(1L, "Aleksa", "aleksa@gmail.com"));
-        users.put(2L, new User(2L, "Marko", "marko@gmail.com"));
-        users.put(3L, new User(3L, "Petar", "petar@gmail.com"));
+    private void save() throws IOException {
+        om.writeValue(new File("users.json"), users.values());
+    }
+
+    public RequestHandler() throws IOException {
+        if(file.exists() && file.length() > 0){
+            List<User> loaded = om.readValue(file, new TypeReference<List<User>>() {});
+            for(User u : loaded){
+                users.put(u.getId(), u);
+            }
+            long max = 0;
+            for (User u : users.values()){
+                max = Math.max(max, u.getId());
+            }
+            nextId = max + 1;
+        }
     }
 }
