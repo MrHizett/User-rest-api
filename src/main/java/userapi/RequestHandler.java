@@ -8,6 +8,7 @@ import com.sun.net.httpserver.HttpHandler;
 
 import java.io.*;
 import java.nio.charset.StandardCharsets;
+import java.util.Base64;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -30,8 +31,31 @@ public class RequestHandler implements HttpHandler {
 
             String path = exchange.getRequestURI().getPath();
             String[] parts = path.split("/");
-
             boolean hasId = parts.length == 3 && !parts[2].isBlank();
+
+            String authHeader = exchange.getRequestHeaders().getFirst("Authorization");
+
+            if(authHeader == null || !authHeader.startsWith("Basic ")){
+                exchange.sendResponseHeaders(401, -1);
+                return;
+            }
+
+            String encoded = authHeader.substring("Basic ".length());
+            String decoded;
+
+            try {
+                decoded = new String(Base64.getDecoder().decode(encoded), StandardCharsets.UTF_8);
+            }catch (IllegalArgumentException e){
+                exchange.sendResponseHeaders(401, -1);
+                return;
+            }
+
+            String[] credentials = decoded.split(":");
+
+            if(credentials.length != 2 || !credentials[0].equals("admin") || !credentials[1].equals("password123")){
+                exchange.sendResponseHeaders(401, -1);
+                return;
+            }
 
             if("GET".equals(method) && !hasId){
                 json = om.writeValueAsString(users.values());
